@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>高齢者薬剤学習アプリ Pro (Ver.18.0)</title>
+    <title>高齢者薬剤学習アプリ Pro (Ver.21.0)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -25,10 +25,10 @@
     <header class="bg-indigo-900 text-white p-3 shadow-md sticky top-0 z-30">
         <div class="max-w-3xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-2">
-                <i data-lucide="shield-alert" class="h-6 w-6 text-emerald-400"></i>
+                <i data-lucide="shield-check" class="h-6 w-6 text-emerald-400"></i>
                 <div>
                     <h1 class="text-base font-bold leading-tight">薬剤判断サポート Pro</h1>
-                    <p class="text-[10px] text-indigo-300">Ver.18.0 判定ルール詳細表示版</p>
+                    <p class="text-[10px] text-indigo-300">Ver.21.0 入力・検索ロジック完全修正版</p>
                 </div>
             </div>
         </div>
@@ -241,8 +241,68 @@
                 lucide.createIcons();
             },
 
-            setCat(c) { this.state.cat = c; this.state.search = ''; this.render(); },
-            setSearch(s) { this.state.search = s; if(s) this.state.cat = null; this.render(); },
+            // --- リスト操作（DOM更新分離版） ---
+            setCat(c) { 
+                this.state.cat = c; 
+                this.state.search = ''; 
+                // カテゴリ変更時は全体再描画でも良いが、リストだけ更新する
+                this.updateListOnly();
+                
+                // ボタンの見た目更新（簡易的に全描画回避のためclass操作）
+                const btns = document.querySelectorAll('#cat-container button');
+                btns.forEach(b => {
+                    // 全てリセット
+                    b.className = `whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm bg-white border border-slate-200 text-slate-600`;
+                    if((c === null && b.textContent === '全て') || b.textContent === c) {
+                        b.className = `whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm bg-indigo-700 text-white`;
+                    }
+                });
+            },
+            
+            // 検索入力時はここだけ叩く
+            handleInput(val) {
+                this.state.search = val;
+                if(val) {
+                    this.state.cat = null;
+                    // カテゴリボタンの選択解除
+                    const btns = document.querySelectorAll('#cat-container button');
+                    btns.forEach(b => b.className = `whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm bg-white border border-slate-200 text-slate-600`);
+                }
+                this.updateListOnly();
+            },
+
+            // リスト部分のみ更新する関数
+            updateListOnly() {
+                const container = document.getElementById('drug-list-container');
+                if(!container) return;
+
+                let list = DRUGS;
+                if(this.state.cat) list = list.filter(d => d.cat === this.state.cat);
+                if(this.state.search) {
+                    const low = this.state.search.toLowerCase();
+                    list = list.filter(d => d.name.toLowerCase().includes(low) || d.general.toLowerCase().includes(low) || d.ef.toLowerCase().includes(low));
+                }
+
+                container.innerHTML = `
+                    <div class="text-xs font-bold text-slate-400 px-1 mb-2">${list.length} 件</div>
+                    <div class="grid gap-3">
+                        ${list.map(d => `
+                            <div onclick="app.openModal(${d.id})" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center active:bg-slate-50 transition-colors">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${d.cat}</span>
+                                    </div>
+                                    <div class="font-bold text-slate-800">${d.name}</div>
+                                    <div class="text-xs text-slate-400 font-mono">${d.general}</div>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-5 h-5 text-slate-300"></i>
+                            </div>
+                        `).join('')}
+                        ${list.length === 0 ? '<div class="p-8 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">該当なし</div>' : ''}
+                    </div>
+                `;
+                lucide.createIcons();
+            },
 
             openModal(id) {
                 const drug = DRUGS.find(d => d.id === id);
@@ -547,46 +607,29 @@
                         </div>
                     `;
                 } else if (this.state.tab === 'list') {
-                    let list = DRUGS;
-                    if(this.state.cat) list = list.filter(d => d.cat === this.state.cat);
-                    if(this.state.search) {
-                        const low = this.state.search.toLowerCase();
-                        list = list.filter(d => d.name.toLowerCase().includes(low) || d.general.toLowerCase().includes(low) || d.ef.toLowerCase().includes(low));
-                    }
-
+                    // List view structure (initial render only, updated via updateListOnly)
                     main.innerHTML = `
                         <div class="space-y-4 animate-fade-in pb-10">
                             <!-- Search & Cat -->
                             <div class="sticky top-0 bg-slate-100 pt-2 pb-4 z-10 space-y-3">
                                 <div class="relative">
                                     <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5"></i>
-                                    <input type="text" placeholder="名前・成分で検索..." value="${this.state.search}" oninput="app.setSearch(this.value)" class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm bg-white">
+                                    <input id="search-input" type="text" placeholder="名前・成分で検索..." value="${this.state.search}" 
+                                        oninput="app.handleInput(this.value)"
+                                        class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-sm bg-white">
                                 </div>
-                                <div class="flex flex-wrap gap-2 pb-2">
-                                    <button onclick="app.setCat(null)" class="px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${this.state.cat === null ? 'bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-600'}">全て</button>
-                                    ${CATEGORIES.map(c => `<button onclick="app.setCat('${c}')" class="px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${this.state.cat === c ? 'bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-600'}">${c}</button>`).join('')}
+                                <div id="cat-container" class="flex flex-wrap gap-2 pb-2">
+                                    <button onclick="app.setCat(null)" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm ${this.state.cat === null ? 'bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-600'}">全て</button>
+                                    ${CATEGORIES.map(c => `<button onclick="app.setCat('${c}')" class="whitespace-nowrap px-4 py-2 rounded-full text-xs font-bold transition-all shadow-sm ${this.state.cat === c ? 'bg-indigo-700 text-white' : 'bg-white border border-slate-200 text-slate-600'}">${c}</button>`).join('')}
                                 </div>
                             </div>
                             
-                            <!-- List -->
-                            <div class="grid gap-3">
-                                <div class="text-xs font-bold text-slate-400 px-1">${list.length} 件</div>
-                                ${list.map(d => `
-                                    <div onclick="app.openModal(${d.id})" class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center active:bg-slate-50 transition-colors">
-                                        <div>
-                                            <div class="flex items-center gap-2 mb-1">
-                                                <span class="text-[10px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded">${d.cat}</span>
-                                            </div>
-                                            <div class="font-bold text-slate-800">${d.name}</div>
-                                            <div class="text-xs text-slate-400 font-mono">${d.general}</div>
-                                        </div>
-                                        <i data-lucide="chevron-right" class="w-5 h-5 text-slate-300"></i>
-                                    </div>
-                                `).join('')}
-                                ${list.length === 0 ? '<div class="p-8 text-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">該当なし</div>' : ''}
-                            </div>
+                            <!-- List Container -->
+                            <div id="drug-list-container"></div>
                         </div>
                     `;
+                    // 初回リスト描画
+                    this.updateListOnly();
                 }
                 lucide.createIcons();
             }
