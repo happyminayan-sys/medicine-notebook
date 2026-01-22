@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>高齢者薬剤学習アプリ（神経系・血流改善追加版）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .tap-highlight-transparent { -webkit-tap-highlight-color: transparent; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        /* スクロールバー非表示 */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen pb-24 tap-highlight-transparent">
+
+    <!-- Header -->
+    <header class="bg-indigo-800 text-white p-3 shadow-md sticky top-0 z-10">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <i data-lucide="pill" class="h-5 w-5"></i>
+                <div>
+                    <h1 class="text-base font-bold leading-tight">高齢者薬剤学習</h1>
+                    <p class="text-[10px] text-indigo-200">Ver.6.0 タリージェ・リマプロスト追加</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-3xl mx-auto p-3" id="app"></main>
+
+    <!-- Nav -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 shadow-lg z-20 safe-bottom">
+        <div class="max-w-3xl mx-auto grid grid-cols-4 gap-1 p-1">
+            <button onclick="app.setTab('learn')" id="btn-learn" class="flex flex-col items-center p-2 rounded-lg transition-colors text-indigo-700 bg-indigo-50">
+                <i data-lucide="book-open" class="h-5 w-5 mb-0.5"></i>
+                <span class="text-[9px] font-bold">全リスト</span>
+            </button>
+            <button onclick="app.setTab('symptom')" id="btn-symptom" class="flex flex-col items-center p-2 rounded-lg transition-colors text-slate-400 hover:bg-slate-50">
+                <i data-lucide="stethoscope" class="h-5 w-5 mb-0.5"></i>
+                <span class="text-[9px] font-bold">症状から</span>
+            </button>
+            <button onclick="app.setTab('compare')" id="btn-compare" class="flex flex-col items-center p-2 rounded-lg transition-colors text-slate-400 hover:bg-slate-50">
+                <i data-lucide="arrow-left-right" class="h-5 w-5 mb-0.5"></i>
+                <span class="text-[9px] font-bold">比較相談</span>
+            </button>
+            <button onclick="app.setTab('quiz')" id="btn-quiz" class="flex flex-col items-center p-2 rounded-lg transition-colors text-slate-400 hover:bg-slate-50">
+                <i data-lucide="brain-circuit" class="h-5 w-5 mb-0.5"></i>
+                <span class="text-[9px] font-bold">クイズ</span>
+            </button>
+        </div>
+    </nav>
+
+    <script>
+        // --- 1. 薬剤データ (88件) ---
+        const DRUGS = [
+            // 抗生剤
+            { id: 1, name: "ケフレックス", general: "セファレキシン", cat: "抗生剤", ef: "セフェム系", note: "細菌を殺す。カプセル剤。" },
+            { id: 2, name: "フロモックス", general: "セフカペンピボキシル", cat: "抗生剤", ef: "セフェム系", note: "小児から高齢者まで頻用。" },
+            { id: 3, name: "セフゾン", general: "セフジニル", cat: "抗生剤", ef: "セフェム系", note: "鉄剤との併用で便が赤くなる。" },
+            { id: 4, name: "メイアクト", general: "セフジトレンピボキシル", cat: "抗生剤", ef: "セフェム系", note: "食後の服用推奨。" },
+            { id: 5, name: "シプロキサン", general: "シプロフロキサシン", cat: "抗生剤", ef: "ニューキノロン系", note: "尿路感染症などに。" },
+            { id: 6, name: "クラビット", general: "レボフロキサシン", cat: "抗生剤", ef: "ニューキノロン系", note: "1日1回タイプが主流。" },
+            { id: 7, name: "ジェニナック", general: "シタフロキサシン", cat: "抗生剤", ef: "ニューキノロン系", note: "呼吸器感染症に強い。" },
+            // 精神・神経
+            { id: 8, name: "アリセプト", general: "ドネペジル", cat: "精神・神経", ef: "抗認知症薬", note: "アルツハイマー型。意欲向上。" },
+            { id: 9, name: "レミニール", general: "ガランタミン", cat: "精神・神経", ef: "抗認知症薬", note: "アルツハイマー型。" },
+            { id: 10, name: "メマリー", general: "メマンチン", cat: "精神・神経", ef: "NMDA受容体拮抗薬", note: "興奮を抑える。中等度〜高度。" },
+            { id: 11, name: "イクセロン/リバスタッチ", general: "リバスチグミン", cat: "精神・神経", ef: "貼る抗認知症薬", note: "皮膚のかぶれに注意。" },
+            { id: 12, name: "パキシル", general: "パロキセチン", cat: "精神・神経", ef: "抗うつ薬(SSRI)", note: "うつ、パニック障害。" },
+            { id: 13, name: "デプロメール", general: "フルボキサミン", cat: "精神・神経", ef: "抗うつ薬(SSRI)", note: "強迫性障害などにも。" },
+            { id: 14, name: "ジェイゾロフト", general: "セルトラリン", cat: "精神・神経", ef: "抗うつ薬(SSRI)", note: "高齢者にも使いやすい。" },
+            { id: 15, name: "レスリン", general: "トラゾドン", cat: "精神・神経", ef: "抗うつ薬", note: "眠気を催すため就寝前に使うことも。" },
+            { id: 16, name: "イーケプラ", general: "レベチラセタム", cat: "精神・神経", ef: "抗てんかん薬", note: "高齢者てんかんの第一選択。" },
+            { id: 17, name: "トピナ", general: "トピラマート", cat: "精神・神経", ef: "抗てんかん薬", note: "片頭痛予防にも使われる。" },
+            { id: 18, name: "デパケン", general: "バルプロ酸", cat: "精神・神経", ef: "抗てんかん薬", note: "気分安定薬としても使用。" },
+            { id: 19, name: "ランドセン", general: "クロナゼパム", cat: "精神・神経", ef: "抗てんかん薬", note: "筋弛緩作用、鎮静作用。" },
+            { id: 20, name: "ネオドパゾール", general: "レボドパ・カルビドパ", cat: "精神・神経", ef: "パーキンソン病", note: "ドパミン補充。基本薬。" },
+            { id: 21, name: "マドパー", general: "レボドパ・ベンセラジド", cat: "精神・神経", ef: "パーキンソン病", note: "ドパミン補充。" },
+            { id: 22, name: "タスモリン", general: "ビペリデン", cat: "精神・神経", ef: "抗パーキンソン病", note: "手の震え（振戦）に効く。" },
+            { id: 23, name: "抑肝散(ツムラ54)", general: "漢方薬", cat: "精神・神経", ef: "漢方薬", note: "認知症のイライラ・怒りっぽさに。" },
+            // 睡眠薬
+            { id: 24, name: "マイスリー", general: "ゾルピデム", cat: "睡眠薬", ef: "超短時間型", note: "寝付き改善。ふらつき注意。" },
+            { id: 25, name: "レンドルミン", general: "ブロチゾラム", cat: "睡眠薬", ef: "短時間型", note: "中途覚醒にも有効。" },
+            { id: 26, name: "アモバン", general: "ゾピクロン", cat: "睡眠薬", ef: "超短時間型", note: "翌朝の苦味が特徴。" },
+            { id: 27, name: "ルネスタ", general: "エスゾピクロン", cat: "睡眠薬", ef: "超短時間型", note: "アモバンの苦味を軽減。" },
+            { id: 28, name: "ベルソムラ", general: "スボレキサント", cat: "睡眠薬", ef: "オレキシン拮抗薬", note: "自然な眠気。転倒リスク低。" },
+            { id: 29, name: "デエビゴ", general: "レンボレキサント", cat: "睡眠薬", ef: "オレキシン拮抗薬", note: "入眠・中途覚醒に有効。" },
+            { id: 30, name: "ロゼレム", general: "ラメルテオン", cat: "睡眠薬", ef: "メラトニン受動態", note: "体内時計調整。安全性が高い。" },
+            // 循環器・血圧
+            { id: 31, name: "ラシックス", general: "フロセミド", cat: "循環器", ef: "ループ利尿薬", note: "強力なむくみ取り。" },
+            { id: 32, name: "ルプラック", general: "トラセミド", cat: "循環器", ef: "ループ利尿薬", note: "カリウム低下が少ない。" },
+            { id: 33, name: "ダイアート", general: "アゾセミド", cat: "循環器", ef: "ループ利尿薬", note: "作用時間が長い。" },
+            { id: 34, name: "アルダクトン", general: "スピロノラクトン", cat: "循環器", ef: "カリウム保持性利尿薬", note: "心不全治療にも。" },
+            { id: 35, name: "サムスカ", general: "トルバプタン", cat: "循環器", ef: "水利尿薬", note: "水だけを出す。Na低下なし。" },
+            { id: 36, name: "ワソラン", general: "ベラパミル", cat: "循環器", ef: "Ca拮抗薬", note: "頻脈性不整脈を抑える。" },
+            { id: 37, name: "アムロジン", general: "アムロジピン", cat: "循環器", ef: "Ca拮抗薬", note: "最も一般的な降圧剤。" },
+            { id: 38, name: "アダラート", general: "ニフェジピン", cat: "循環器", ef: "Ca拮抗薬", note: "血圧を下げる。" },
+            { id: 39, name: "ブロプレス", general: "カンデサルタン", cat: "循環器", ef: "ARB(降圧剤)", note: "心臓保護作用あり。" },
+            { id: 40, name: "ミカルディス", general: "テルミサルタン", cat: "循環器", ef: "ARB(降圧剤)", note: "作用時間が長い。" },
+            { id: 41, name: "オルメテック", general: "オルメサルタン", cat: "循環器", ef: "ARB(降圧剤)", note: "降圧効果が強い。" },
+            { id: 42, name: "メインテート", general: "ビソプロロール", cat: "循環器", ef: "β遮断薬", note: "脈をゆっくりにして心臓を休める。" },
+            // 血液・血管
+            { id: 43, name: "バイアスピリン", general: "アスピリン", cat: "血液・血管", ef: "抗血小板薬", note: "血液サラサラ。胃荒れ注意。" },
+            { id: 44, name: "プラビックス", general: "クロピドグレル", cat: "血液・血管", ef: "抗血小板薬", note: "脳梗塞予防など。" },
+            { id: 45, name: "イグザレルト", general: "リバーロキサバン", cat: "血液・血管", ef: "抗凝固薬(DOAC)", note: "心房細動の血栓予防。" },
+            { id: 46, name: "エリキュース", general: "アピキサバン", cat: "血液・血管", ef: "抗凝固薬(DOAC)", note: "腎機能低下でも使いやすい。" },
+            { id: 47, name: "リクシアナ", general: "エドキサバン", cat: "血液・血管", ef: "抗凝固薬(DOAC)", note: "1日1回服用。" },
+            { id: 48, name: "ワーファリン", general: "ワルファリン", cat: "血液・血管", ef: "抗凝固薬", note: "納豆・青汁禁止。" },
+            { id: 88, name: "オパルモン", general: "リマプロスト", cat: "血液・血管", ef: "PGE1誘導体", note: "脊柱管狭窄症の足のしびれ・血流改善。" },
+            { id: 89, name: "プレタール", general: "シロスタゾール", cat: "血液・血管", ef: "抗血小板薬", note: "血管拡張作用もあり足の冷えにも。" },
+            // 消化器・代謝
+            { id: 49, name: "リピトール", general: "アトルバスタチン", cat: "代謝・胃腸", ef: "スタチン系", note: "LDLコレステロール低下。" },
+            { id: 50, name: "クレストール", general: "ロスバスタチン", cat: "代謝・胃腸", ef: "スタチン系", note: "強力なLDL低下作用。" },
+            { id: 51, name: "リバロ", general: "ピタバスタチン", cat: "代謝・胃腸", ef: "スタチン系", note: "相互作用が少ない。" },
+            { id: 52, name: "メバロチン", general: "シンバスタチン", cat: "代謝・胃腸", ef: "スタチン系", note: "スタンダードな薬。" },
+            { id: 53, name: "ローコール", general: "フルバスタチン", cat: "代謝・胃腸", ef: "スタチン系", note: "マイルドな効き目。" },
+            { id: 54, name: "ネキシウム", general: "エソメプラゾール", cat: "代謝・胃腸", ef: "PPI(胃薬)", note: "胃酸分泌を強力に抑制。" },
+            { id: 55, name: "オメプラール", general: "オメプラゾール", cat: "代謝・胃腸", ef: "PPI(胃薬)", note: "胃潰瘍・逆流性食道炎。" },
+            { id: 56, name: "タケキャブ", general: "ボノプラザン", cat: "代謝・胃腸", ef: "P-CAB(胃薬)", note: "即効性があり強力。" },
+            { id: 57, name: "ガスター", general: "ファモチジン", cat: "代謝・胃腸", ef: "H2ブロッカー", note: "胃酸を抑える。" },
+            { id: 58, name: "ムコスタ", general: "レバミピド", cat: "代謝・胃腸", ef: "胃粘膜保護", note: "胃の粘膜を丈夫にする。" },
+            { id: 59, name: "マグミット", general: "酸化マグネシウム", cat: "代謝・胃腸", ef: "緩下剤", note: "便を柔らかくする。水分必須。" },
+            { id: 60, name: "センノシド", general: "センノシド", cat: "代謝・胃腸", ef: "刺激性下剤", note: "腸を動かして出す。頓用が多い。" },
+            { id: 61, name: "ラキソベロン", general: "ピコスルファート", cat: "代謝・胃腸", ef: "液体下剤", note: "滴数で調整可能。" },
+            { id: 62, name: "グーフィス", general: "エロビキシバット", cat: "代謝・胃腸", ef: "胆汁酸トランスポーター阻害", note: "食前に飲む新しい便秘薬。" },
+            { id: 63, name: "ジャヌビア", general: "シタグリプチン", cat: "代謝・胃腸", ef: "糖尿病薬(DPP4)", note: "血糖値を下げる。" },
+            { id: 64, name: "メトグルコ", general: "メトホルミン", cat: "代謝・胃腸", ef: "糖尿病薬", note: "インスリン抵抗性改善。" },
+            { id: 65, name: "ジャディアンス", general: "エンパグリフロジン", cat: "代謝・胃腸", ef: "糖尿病薬(SGLT2)", note: "尿に糖を出す。水分補給重要。" },
+            // その他
+            { id: 66, name: "エディロール", general: "エルデカルシトール", cat: "その他", ef: "活性型ビタミンD3", note: "骨粗鬆症。Ca吸収促進。" },
+            { id: 67, name: "ワンアルファ", general: "アルファカルシドール", cat: "その他", ef: "活性型ビタミンD3", note: "Ca代謝改善。" },
+            { id: 68, name: "グラケー", general: "メナテトレノン", cat: "その他", ef: "ビタミンK2", note: "骨形成促進。" },
+            { id: 69, name: "メチコバール", general: "メコバラミン", cat: "その他", ef: "ビタミンB12", note: "末梢神経修復。しびれに。" },
+            { id: 70, name: "プレドニン", general: "プレドニゾロン", cat: "その他", ef: "ステロイド", note: "炎症・アレルギー抑制。" },
+            { id: 71, name: "ホクナリンテープ", general: "ツロブテロール", cat: "その他", ef: "気管支拡張薬", note: "貼るタイプ。咳・喘息。" },
+            { id: 72, name: "レグテクト", general: "アカンプロサート", cat: "その他", ef: "断酒補助剤", note: "飲酒欲求低減。" },
+            { id: 73, name: "エバステル", general: "エバスチン", cat: "その他", ef: "抗アレルギー薬", note: "花粉症・蕁麻疹。" },
+            { id: 74, name: "タリオン", general: "ベポタスチン", cat: "その他", ef: "抗アレルギー薬", note: "速く効く。痒み・鼻炎。" },
+            { id: 75, name: "アレグラ", general: "フェキソフェナジン", cat: "その他", ef: "抗アレルギー薬", note: "眠くなりにくい。" },
+            { id: 76, name: "アタラックス", general: "ヒドロキシジン", cat: "その他", ef: "抗ヒスタミン薬", note: "痒み止め。不安時にも。" },
+            { id: 77, name: "カロナール", general: "アセトアミノフェン", cat: "その他", ef: "解熱鎮痛剤", note: "胃に優しく安全性が高い。" },
+            { id: 78, name: "ロキソニン", general: "ロキソプロフェン", cat: "その他", ef: "NSAIDs(鎮痛)", note: "炎症を抑える。胃荒れ注意。" },
+            { id: 79, name: "セレコックス", general: "セレコキシブ", cat: "その他", ef: "NSAIDs(鎮痛)", note: "胃腸障害が少ない。" },
+            { id: 80, name: "モーラステープ", general: "ケトプロフェン", cat: "その他", ef: "湿布薬", note: "光線過敏症に注意（日光NG）。" },
+            { id: 81, name: "ロコアテープ", general: "エスフルルビプロフェン", cat: "その他", ef: "強力湿布薬", note: "飲み薬並みに効く。枚数制限あり。" },
+            { id: 82, name: "ツムラ68", general: "芍薬甘草湯", cat: "その他", ef: "漢方薬", note: "こむら返り（足のつり）特効薬。" },
+            { id: 83, name: "ベタニス", general: "ミラベグロン", cat: "その他", ef: "過活動膀胱", note: "頻尿・尿漏れ改善。" },
+            { id: 84, name: "ベシケア", general: "ソリフェナシン", cat: "その他", ef: "過活動膀胱", note: "膀胱の収縮を抑える。" },
+            { id: 85, name: "ハルナール", general: "タムスロシン", cat: "その他", ef: "前立腺肥大症", note: "尿を出やすくする。" },
+            { id: 86, name: "タリージェ", general: "ミロガバリン", cat: "その他", ef: "神経障害性疼痛", note: "神経の痛みを抑える。腎機能で調整。ふらつき。" },
+            { id: 87, name: "リリカ", general: "プレガバリン", cat: "その他", ef: "神経障害性疼痛", note: "神経の痛み。めまい・ふらつきが強い。" },
+        ];
+        
+        const CATEGORIES = ["抗生剤", "精神・神経", "睡眠薬", "循環器", "血液・血管", "代謝・胃腸", "その他"];
+
+        // --- 比較・アドバイスデータ ---
+        const COMPARISONS = {
+            "24-25": "【マイスリー vs レンドルミン】\n●マイスリー(超短時間型)：寝付きが悪い人に。\n●レンドルミン(短時間型)：中途覚醒がある人に。\n※レンドルミンの方が作用時間が長いです。",
+            "24-28": "【マイスリー vs ベルソムラ】\n●マイスリー：強制的に眠らせるGABA系。\n●ベルソムラ：自然な眠気のオレキシン系。\n※転倒リスクはベルソムラが低い。",
+            "25-29": "【レンドルミン vs デエビゴ】\n●レンドルミン：ベンゾ系。ふらつき注意。\n●デエビゴ：オレキシン系。依存性が少ない。\n※デエビゴへの切り替え推奨。",
+            "77-78": "【カロナール vs ロキソニン】\n●カロナール：胃・腎への負担が少なく高齢者の第一選択。\n●ロキソニン：強力な抗炎症作用だが胃潰瘍・腎低下リスクあり。",
+            "78-86": "【ロキソニン vs タリージェ】\n●ロキソニン：炎症の痛み(ねん挫、関節炎)。\n●タリージェ：神経の痛み(しびれ、ピリピリ)。\n※痛みの種類によって使い分けます。",
+            "86-87": "【タリージェ vs リリカ】\n●リリカ：旧世代。めまい・ふらつきが出やすい。\n●タリージェ：新世代。神経への選択性が高く、副作用が比較的マイルド。",
+            "59-60": "【マグミット vs センノシド】\n●マグミット：便を柔らかくする(非刺激性)。水分必須。\n●センノシド：腸を動かす(刺激性)。連用で効かなくなる(耐性)。",
+        };
+
+        const INTERACTIONS = {
+            "5-78": "【⚠ 併用注意】ニューキノロン＋ロキソニン＝痙攣リスク。",
+            "6-78": "【⚠ 併用注意】クラビット＋ロキソニン＝痙攣リスク。",
+            "48": "【⚠ 重要】ワーファリン服用中は納豆禁止。",
+            "6-59": "【i 吸収注意】マグミットとクラビットは時間差で服用。",
+            "86": "【⚠ 注意】タリージェは腎機能低下時、減量が必要です。",
+            "88": "【⚠ 注意】オパルモンは血流を良くするため、出血傾向に注意。",
+        };
+
+        // --- 症状別検索データ ---
+        const SYMPTOMS = [
+            {
+                icon: "moon", label: "眠れない",
+                items: [
+                    { title: "寝付きが悪い (入眠困難)", drugs: [24, 26, 27], desc: "超短時間型が推奨されます" },
+                    { title: "途中で起きる (中途覚醒)", drugs: [25, 29, 28], desc: "短時間型やオレキシン系が推奨されます" },
+                    { title: "体内時計のズレ", drugs: [30], desc: "昼夜逆転気味の方に" }
+                ]
+            },
+            {
+                icon: "thermometer", label: "痛み・熱",
+                items: [
+                    { title: "マイルド・腎機能低下時", drugs: [77], desc: "まずはカロナールから" },
+                    { title: "腫れ・炎症が強い", drugs: [78, 79], desc: "NSAIDs。胃薬併用推奨" },
+                    { title: "湿布で対応", drugs: [80, 81], desc: "モーラスは日光注意" }
+                ]
+            },
+            {
+                icon: "zap", label: "しびれ・神経",
+                items: [
+                    { title: "ビリビリ・神経痛", drugs: [86, 87], desc: "神経障害性疼痛治療薬" },
+                    { title: "脊柱管狭窄症のしびれ", drugs: [88], desc: "血流改善薬" },
+                    { title: "末梢神経修復", drugs: [69], desc: "ビタミンB12" }
+                ]
+            },
+            {
+                icon: "angry", label: "便秘・お腹",
+                items: [
+                    { title: "便が硬い", drugs: [59], desc: "水分を集めて柔らかくする" },
+                    { title: "便意がない・出ない", drugs: [60, 61], desc: "腸を刺激して出す" },
+                    { title: "胃が痛い・胸焼け", drugs: [54, 56, 57], desc: "胃酸を抑える薬" }
+                ]
+            },
+            {
+                icon: "frown", label: "皮膚・風邪",
+                items: [
+                    { title: "かゆみ・湿疹", drugs: [73, 74, 76], desc: "抗アレルギー・抗ヒスタミン" },
+                    { title: "咳・喘息", drugs: [71], desc: "テープ剤が使いやすい" },
+                    { title: "足がつる", drugs: [82], desc: "即効性あり" }
+                ]
+            }
+        ];
+
+        const app = {
+            state: {
+                tab: 'learn', // learn, symptom, compare, quiz
+                cat: null,
+                search: '',
+                comp1: null,
+                comp2: null,
+                symptomCat: null, // 選択中の症状カテゴリインデックス
+                quiz: { q: [], idx: 0, hist: {}, status: 'idle' }
+            },
+            
+            init() {
+                this.render();
+                lucide.createIcons();
+            },
+
+            setTab(tab) {
+                this.state.tab = tab;
+                this.state.symptomCat = null;
+                this.updateNav();
+                this.render();
+                window.scrollTo(0,0);
+            },
+
+            updateNav() {
+                const tabs = ['learn', 'symptom', 'compare', 'quiz'];
+                const icons = ['book-open', 'stethoscope', 'arrow-left-right', 'brain-circuit'];
+                
+                tabs.forEach((t, i) => {
+                    const btn = document.getElementById(`btn-${t}`);
+                    const isActive = this.state.tab === t;
+                    btn.className = `flex flex-col items-center p-2 rounded-lg transition-colors ${isActive ? 'text-indigo-700 bg-indigo-50' : 'text-slate-400 hover:bg-slate-50'}`;
+                });
+                lucide.createIcons();
+            },
+
+            // --- Learning Logic ---
+            setCat(c) { this.state.cat = c; this.state.search = ''; this.render(); },
+            setSearch(s) { this.state.search = s; if(s) this.state.cat = null; this.render(); },
+
+            // --- Compare Logic ---
+            setComp(slot, id) {
+                if(slot === 1) this.state.comp1 = id ? DRUGS.find(d => d.id == id) : null;
+                else this.state.comp2 = id ? DRUGS.find(d => d.id == id) : null;
+                this.render();
+            },
+            
+            getAdvice() {
+                const d1 = this.state.comp1;
+                const d2 = this.state.comp2;
+                if(!d1 && !d2) return null;
+                let advices = [];
+                if(d1 && INTERACTIONS[d1.id]) advices.push(INTERACTIONS[d1.id]);
+                if(d2 && INTERACTIONS[d2.id]) advices.push(INTERACTIONS[d2.id]);
+                if(d1 && d2) {
+                    const ids = [d1.id, d2.id].sort((a,b) => a-b);
+                    const key = `${ids[0]}-${ids[1]}`;
+                    if(COMPARISONS[key]) advices.push(COMPARISONS[key]);
+                    if(INTERACTIONS[key]) advices.push(INTERACTIONS[key]);
+                    if(!COMPARISONS[key] && !INTERACTIONS[key] && d1.cat === d2.cat) advices.push(`【${d1.cat}同士の比較】\n●${d1.name}: ${d1.note}\n●${d2.name}: ${d2.note}`);
+                }
+                return advices;
+            },
+
+            // --- Symptom Logic ---
+            setSymptomCat(idx) {
+                this.state.symptomCat = idx === this.state.symptomCat ? null : idx;
+                this.render();
+            },
+
+            // --- Quiz Logic ---
+            startQuiz() {
+                const shuffled = [...DRUGS].sort(() => 0.5 - Math.random()).slice(0, 15);
+                this.state.quiz.q = shuffled.map((d, i) => {
+                    const correctCat = d.cat;
+                    const wrongCats = CATEGORIES.filter(c => c !== correctCat).sort(() => 0.5 - Math.random()).slice(0, 3);
+                    return { id: i, drug: d, opts: [...wrongCats, correctCat].sort(() => 0.5 - Math.random()) };
+                });
+                this.state.quiz.idx = 0;
+                this.state.quiz.hist = {};
+                this.state.quiz.status = 'playing';
+                this.render();
+            },
+            answer(ans) {
+                const { idx, hist } = this.state.quiz;
+                if (hist[idx]) return;
+                const q = this.state.quiz.q[idx];
+                hist[idx] = { ans, ok: ans === q.drug.cat };
+                this.render();
+            },
+            move(dir) {
+                const next = this.state.quiz.idx + dir;
+                if (next >= 0 && next < this.state.quiz.q.length) this.state.quiz.idx = next;
+                else if (next >= this.state.quiz.q.length) this.state.quiz.status = 'result';
+                this.render();
+            },
+            reset() { this.state.quiz.status = 'idle'; this.render(); },
+
+            // --- Rendering ---
+            render() {
+                const main = document.getElementById('app');
+                
+                if (this.state.tab === 'learn') {
+                    // --- 学習リスト画面 ---
+                    let list = DRUGS;
+                    if (this.state.cat) list = list.filter(d => d.cat === this.state.cat);
+                    if (this.state.search) {
+                        const low = this.state.search.toLowerCase();
+                        list = list.filter(d => d.name.toLowerCase().includes(low) || d.general.toLowerCase().includes(low) || d.ef.toLowerCase().includes(low));
+                    }
+
+                    main.innerHTML = `
+                        <div class="space-y-4 animate-fade-in pb-10">
+                            <div class="relative sticky top-2 z-20">
+                                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 h-5 w-5"></i>
+                                <input type="text" placeholder="名前・成分・効能で検索" value="${this.state.search}" 
+                                    oninput="app.setSearch(this.value)"
+                                    class="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-indigo-500 outline-none shadow-md bg-white/90 backdrop-blur-sm">
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                <button onclick="app.setCat(null)" class="px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${this.state.cat === null ? 'bg-indigo-700 text-white ring-2 ring-indigo-300' : 'bg-white border border-slate-200 text-slate-600'}">全て</button>
+                                ${CATEGORIES.map(c => `<button onclick="app.setCat('${c}')" class="px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm ${this.state.cat === c ? 'bg-indigo-700 text-white ring-2 ring-indigo-300' : 'bg-white border border-slate-200 text-slate-600'}">${c}</button>`).join('')}
+                            </div>
+                            <div class="text-sm text-slate-500 font-bold px-1 flex justify-between items-end">
+                                <span>${this.state.cat || (this.state.search ? '検索結果' : '全リスト')}</span>
+                                <span class="text-xs font-normal bg-slate-200 px-2 py-0.5 rounded-full">${list.length}件</span>
+                            </div>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                ${list.map(d => `
+                                    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1 hover:border-indigo-400 transition-colors">
+                                        <div class="flex justify-between items-start">
+                                            <span class="text-[10px] font-bold bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded border border-indigo-100">${d.cat}</span>
+                                        </div>
+                                        <h3 class="text-lg font-bold text-slate-800">${d.name}</h3>
+                                        <div class="text-[10px] text-slate-500 font-mono bg-slate-100 inline-block px-1 rounded border border-slate-200 truncate max-w-full">${d.general}</div>
+                                        <div class="mt-2 pt-2 border-t border-slate-100 text-sm text-slate-600">
+                                            <div class="mb-1 text-xs"><span class="font-bold text-indigo-700">効能</span> ${d.ef}</div>
+                                            <div class="text-xs text-slate-500 leading-relaxed bg-slate-50 p-2 rounded">${d.note}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                } else if (this.state.tab === 'symptom') {
+                    // --- 症状検索画面 ---
+                    main.innerHTML = `
+                        <div class="space-y-4 animate-fade-in pb-10">
+                            <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 flex items-start gap-3">
+                                <div class="bg-white p-2 rounded-full shadow-sm"><i data-lucide="stethoscope" class="w-6 h-6 text-indigo-600"></i></div>
+                                <div>
+                                    <h2 class="font-bold text-indigo-800">症状から探す</h2>
+                                    <p class="text-xs text-slate-600 mt-1">「眠れない」「痛い」などの症状から、候補となる薬剤を検索します。</p>
+                                </div>
+                            </div>
+                            
+                            <div class="grid gap-3">
+                                ${SYMPTOMS.map((sym, idx) => {
+                                    const isOpen = this.state.symptomCat === idx;
+                                    return `
+                                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+                                            <button onclick="app.setSymptomCat(${idx})" class="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50">
+                                                <div class="flex items-center gap-3">
+                                                    <div class="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-600"><i data-lucide="${sym.icon}" class="w-4 h-4"></i></div>
+                                                    <span class="font-bold text-slate-700">${sym.label}</span>
+                                                </div>
+                                                <i data-lucide="${isOpen ? 'chevron-up' : 'chevron-down'}" class="w-5 h-5 text-slate-400"></i>
+                                            </button>
+                                            
+                                            ${isOpen ? `
+                                                <div class="p-4 bg-slate-50 border-t border-slate-100 space-y-4 animate-fade-in">
+                                                    ${sym.items.map(item => `
+                                                        <div>
+                                                            <div class="flex items-center gap-2 mb-2">
+                                                                <span class="text-sm font-bold text-slate-800">${item.title}</span>
+                                                                <span class="text-[10px] bg-white border border-slate-200 px-1.5 py-0.5 rounded text-slate-500">${item.desc}</span>
+                                                            </div>
+                                                            <div class="grid gap-2 sm:grid-cols-2">
+                                                                ${item.drugs.map(id => {
+                                                                    const d = DRUGS.find(x => x.id === id);
+                                                                    if(!d) return '';
+                                                                    return `
+                                                                        <div class="bg-white p-3 rounded-lg border border-slate-200 flex flex-col">
+                                                                            <div class="flex justify-between items-start">
+                                                                                <span class="text-xs font-bold text-indigo-700">${d.name}</span>
+                                                                                <span class="text-[9px] text-slate-400">${d.cat}</span>
+                                                                            </div>
+                                                                            <p class="text-[10px] text-slate-500 mt-1 leading-tight">${d.note}</p>
+                                                                        </div>
+                                                                    `;
+                                                                }).join('')}
+                                                            </div>
+                                                        </div>
+                                                    `).join('<div class="h-px bg-slate-200 my-2"></div>')}
+                                                </div>
+                                            ` : ''}
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+                    `;
+                } else if (this.state.tab === 'compare') {
+                    // --- 比較・相談画面 ---
+                    const advices = this.getAdvice() || [];
+                    const drugOptions = (currentId) => `
+                        <option value="">選択してください</option>
+                        ${CATEGORIES.map(cat => `
+                            <optgroup label="${cat}">
+                                ${DRUGS.filter(d => d.cat === cat).map(d => `<option value="${d.id}" ${d.id===currentId?'selected':''}>${d.name}</option>`).join('')}
+                            </optgroup>
+                        `).join('')}
+                    `;
+
+                    main.innerHTML = `
+                        <div class="space-y-6 animate-fade-in pb-10">
+                            <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                                <h2 class="font-bold text-indigo-800 flex items-center gap-2 mb-2">
+                                    <i data-lucide="message-square-more" class="w-5 h-5"></i>
+                                    相談・比較モード
+                                </h2>
+                                <p class="text-xs text-slate-600">「どっちの薬がいい？」「飲み合わせは？」など、現場でよくある疑問をサポートします。</p>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-500">薬剤A</label>
+                                    <select class="w-full p-2 rounded-lg border border-slate-300 text-sm bg-white" onchange="app.setComp(1, this.value)">
+                                        ${drugOptions(this.state.comp1?.id)}
+                                    </select>
+                                </div>
+                                <div class="space-y-1">
+                                    <label class="text-xs font-bold text-slate-500">薬剤B (比較対象)</label>
+                                    <select class="w-full p-2 rounded-lg border border-slate-300 text-sm bg-white" onchange="app.setComp(2, this.value)">
+                                        ${drugOptions(this.state.comp2?.id)}
+                                    </select>
+                                </div>
+                            </div>
+
+                            ${(this.state.comp1 || this.state.comp2) ? `
+                                <div class="grid grid-cols-2 gap-4">
+                                    ${this.state.comp1 ? `
+                                        <div class="bg-white p-3 rounded-xl border shadow-sm">
+                                            <div class="text-[10px] font-bold bg-slate-100 inline-block px-1 rounded text-slate-500 mb-1">${this.state.comp1.cat}</div>
+                                            <h3 class="font-bold text-lg text-slate-800">${this.state.comp1.name}</h3>
+                                            <p class="text-xs text-slate-500 mt-1">${this.state.comp1.note}</p>
+                                        </div>
+                                    ` : '<div></div>'}
+                                    ${this.state.comp2 ? `
+                                        <div class="bg-white p-3 rounded-xl border shadow-sm">
+                                            <div class="text-[10px] font-bold bg-slate-100 inline-block px-1 rounded text-slate-500 mb-1">${this.state.comp2.cat}</div>
+                                            <h3 class="font-bold text-lg text-slate-800">${this.state.comp2.name}</h3>
+                                            <p class="text-xs text-slate-500 mt-1">${this.state.comp2.note}</p>
+                                        </div>
+                                    ` : '<div></div>'}
+                                </div>
+                            ` : ''}
+
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden min-h-[200px]">
+                                <div class="bg-slate-50 p-3 border-b border-slate-200 font-bold text-slate-600 text-sm flex items-center gap-2">
+                                    <i data-lucide="lightbulb" class="w-4 h-4 text-amber-500"></i>
+                                    アドバイス・比較ポイント
+                                </div>
+                                <div class="p-4 text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">${advices.length > 0 ? advices.join('\n\n------------------\n\n') : '薬剤を選択すると、ここに比較情報やアドバイスが表示されます。'}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // --- クイズ画面 ---
+                    const { status, q, idx, hist } = this.state.quiz;
+                    if (status === 'idle') {
+                        main.innerHTML = `
+                            <div class="flex flex-col items-center py-16 text-center bg-white rounded-2xl border border-slate-200 shadow-sm mt-4">
+                                <div class="bg-indigo-50 p-6 rounded-full mb-6"><i data-lucide="brain" class="h-12 w-12 text-indigo-600"></i></div>
+                                <h2 class="text-2xl font-bold text-slate-800">お薬暗記クイズ</h2>
+                                <p class="text-slate-500 mt-2 text-sm">商品名から正しい分類を選んでください</p>
+                                <button onclick="app.startQuiz()" class="mt-8 px-10 py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">スタート</button>
+                            </div>
+                        `;
+                    } else if (status === 'result') {
+                        const score = Object.values(hist).filter(h => h.ok).length;
+                        main.innerHTML = `
+                            <div class="space-y-4 pb-10">
+                                <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm text-center">
+                                    <div class="text-6xl font-black text-indigo-600 my-2">${score} <span class="text-2xl text-slate-300">/ ${q.length}</span></div>
+                                    <button onclick="app.reset()" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold flex justify-center gap-2 shadow-md hover:bg-slate-700"><i data-lucide="rotate-ccw" class="w-5 h-5"></i> もう一度</button>
+                                </div>
+                                <div class="space-y-2">
+                                    ${q.map((item, i) => {
+                                        const ok = hist[i]?.ok;
+                                        return `<div class="p-3 rounded-lg border flex justify-between items-center bg-white ${ok ? 'border-indigo-200 bg-indigo-50/30' : 'border-red-200 bg-red-50/30'}">
+                                            <div class="text-sm"><div class="font-bold text-slate-800">${item.drug.name}</div><div class="text-xs text-slate-400">正解: ${item.drug.cat}</div></div>
+                                            <i data-lucide="${ok ? 'check-circle' : 'x-circle'}" class="${ok ? 'text-indigo-500' : 'text-red-400'} w-6 h-6"></i>
+                                        </div>`;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `;
+                    } else {
+                        const curQ = q[idx];
+                        const res = hist[idx];
+                        const done = !!res;
+                        main.innerHTML = `
+                            <div class="space-y-6 pb-10">
+                                <div class="flex justify-between text-xs font-bold text-slate-400 px-1"><span>Q.${idx+1}</span><span>${idx+1} / ${q.length}</span></div>
+                                <div class="w-full bg-slate-200 h-2 rounded-full overflow-hidden"><div class="bg-indigo-500 h-full transition-all duration-300" style="width: ${(idx+1)/q.length*100}%"></div></div>
+                                <div class="bg-white p-6 rounded-2xl shadow-md border-2 border-indigo-50 text-center min-h-[180px] flex flex-col justify-center relative overflow-hidden">
+                                    <h2 class="text-3xl font-black text-slate-800 mb-1">${curQ.drug.name}</h2>
+                                    <div class="text-xs text-slate-400 font-mono mb-4">(${curQ.drug.general})</div>
+                                    ${done ? `<div class="absolute inset-0 flex flex-col items-center justify-center bg-white/95 backdrop-blur-sm animate-fade-in z-10"><div class="text-5xl mb-2">${res.ok ? '⭕️' : '❌'}</div><div class="font-bold text-xl ${res.ok ? 'text-indigo-600' : 'text-red-500'} mb-1">${res.ok ? '正解！' : '不正解...'}</div><div class="text-sm font-bold text-slate-500">正解は <span class="text-slate-800 border-b-2 border-indigo-400 px-1">${curQ.drug.cat}</span></div></div>` : ''}
+                                </div>
+                                <div class="grid gap-3">
+                                    ${curQ.opts.map(o => {
+                                        let cls = "bg-white border-2 border-slate-200 text-slate-600 shadow-sm active:scale-[0.98]";
+                                        if (done) { if (o === curQ.drug.cat) cls = "bg-indigo-100 border-indigo-500 text-indigo-900 font-bold"; else if (o === res.ans) cls = "bg-red-50 border-red-400 text-red-900"; else cls = "opacity-30 bg-slate-50"; }
+                                        return `<button onclick="app.answer('${o}')" class="p-4 rounded-xl font-bold text-left transition-all ${cls}" ${done ? 'disabled' : ''}>${o}</button>`;
+                                    }).join('')}
+                                </div>
+                                <div class="flex gap-4 pt-4 border-t border-slate-200">
+                                    <button onclick="app.move(-1)" ${idx===0?'disabled':''} class="flex-1 py-3 px-4 rounded-xl font-bold bg-white border border-slate-300 text-slate-600 disabled:opacity-30 flex items-center justify-center gap-2"><i data-lucide="chevron-left" class="w-4 h-4"></i> 前へ</button>
+                                    <button onclick="app.move(1)" class="flex-1 py-3 px-4 rounded-xl font-bold bg-indigo-600 text-white shadow-md hover:bg-indigo-700 flex items-center justify-center gap-2 active:scale-95 transition-all">${idx===q.length-1 ? '結果へ' : '次へ'} <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                lucide.createIcons();
+            }
+        };
+
+        app.init();
+    </script>
+</body>
+</html>
